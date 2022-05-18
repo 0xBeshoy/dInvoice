@@ -22,8 +22,8 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-// import "./InvoiceNFT.sol";
-// import "./Invoice.sol";
+import "./InvoiceNFT.sol";
+import "./Invoice.sol";
 
 contract Escrow is Ownable, ReentrancyGuard {
     using Counters for Counters.Counter;

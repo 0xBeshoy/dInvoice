@@ -1,4 +1,4 @@
-//SPDX-License-Identifier: GPL
+// SPDX-License-Identifier: GPL-3.0
 
 /*
        /$$ /$$$$$$                               /$$                           /$$$$$$$$                                                      
@@ -14,73 +14,168 @@
                                                                                                                                                                                                                                                                                             
 */
 
-pragma solidity 0.8.13;
+pragma solidity ^0.8.4;
 
+import "@openzeppelin/contracts/utils/Counters.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 
-contract Escrow is Ownable {
-    constructor() payable {}
+// import "./InvoiceNFT.sol";
+// import "./Invoice.sol";
 
-    /*=============================================== All Methods ===============================================*/
+contract Escrow is Ownable, ReentrancyGuard {
+    using Counters for Counters.Counter;
+    Counters.Counter private _invoiceIds; // number of invoices created
 
-    function getInvoiceDetails() public {}
+    bool public initialized;
+    InvoiceNFT public invoiceNFT;
+    Invoice public invoice;
 
-    function getMyInvoices() public {}
+    mapping(uint256 => uint256) balancesOfBuyers; // token id => amount escrowed
+    mapping(uint256 => uint256) balancesOfSellers; // token id => amount to be redeemed
+    mapping(uint256 => bool) approvals; // token id => withdrawl approval by admin
 
-    function setInvoiceComplete() public {}
+    event Escrowed(
+        address _buyer, 
+        address _seller, 
+        uint256 _tokenId, 
+        uint256 _amount
+    );
 
-    /*========================================= Buyer or Seller Methods =========================================*/
+    event Released(
+        uint256 _tokenId,
+        uint256 _milestoneId,
+        address _buyer,
+        uint256 _balance,
+        uint256 _price
+    );
 
-    function createInvoice() public {}
+    event Redeemed(
+        uint256 _tokenId,
+        uint256 _milestoneId,
+        address _seller,
+        uint256 _balance,
+        uint256 _price
+    );
 
-    function acceptTerms() public {}
+    event WithdrawlApproved(uint256 _tokenId);
 
-    function updateTerms() public {}
+    event WithdrewAllETH(
+        uint256 _tokenId,
+        address _buyer,
+        uint256 _balance,
+        bool _isSuccessful
+    );
 
-    function setMilestones() public {}
+    modifier isInitialized() {
+        require(initialized, "Contract is not yet initialized");
+        _;
+    }
 
-    function addMilestone() public {}
+    modifier isSeller(address _seller, uint256 _id) {
+        require(_seller == invoice.getSeller(_id), "Must be the registered seller under the project." );
+        _;
+    }
 
-    function updateMilestone() public {}
+    function initialize(address _invoiceNFTContractAddress, address _invoiceContractAddress) external onlyOwner {
+        /** 
+            instead of using a constructor, 
+            the contract owner can invoke the initialize function
+            ref: https://soliditydeveloper.com/design-pattern-solidity-initialize-contract-after-deployment
+        */
+        invoiceNFT = InvoiceNFT(_invoiceNFTContractAddress);
+        invoice = Invoice(_invoiceContractAddress);
+        initialized = true;
+    }
 
-    function raiseDispute() public {}
+    function escrowToken(address _seller, uint256 _invoiceId, uint256 _amount) external payable isInitialized nonReentrant {
+        require(_seller != address(0), "Cannot escrow to zero address.");
+        require(msg.value > 0, "Cannot escrow 0 ETH.");
+        require(msg.value > _amount, "Please deposit a sufficient amount.");
 
-    function setInvoiceTerms() public {}
+        string memory uri = invoice.getTokenURI(_invoiceId);
 
-    function disputeWithdraw() public {}
+        uint256 tokenId = invoiceNFT.createToken(msg.sender, uri);
 
-    /*=========================================== Buyer Only Methods ===========================================*/
+        balancesOfBuyers[tokenId] = msg.value;
 
-    function buyerFundInvoice() public {}
+        emit Escrowed(
+            msg.sender,
+            _seller,
+            tokenId,
+            _amount
+        );
+    }
 
-    function buyerAddMoreFunds() public {}
+    /// @dev releasing ETH also means the approval of the client
+    function releaseETH(uint256 _tokenId, uint256 _milestoneId) public isInitialized {
+        require(invoiceNFT.ownerOf(_tokenId) == msg.sender, "Must own token to release the funds.");
 
-    /*=========================================== Seller Only Methods ===========================================*/
+        uint256 price = invoice.getPricePerMilestone(_tokenId, _milestoneId);
 
-    function sellerRequestFunds() public {}
+        require(balancesOfBuyers[_tokenId] >= price, "Must have a sufficient balance.");
 
-    function sellerWithdraw() public {}
+        balancesOfSellers[_tokenId] += price; // add to seller
+        balancesOfBuyers[_tokenId] -= price; // deduct from buyer
 
-    /*============================================== Admin Methods ==============================================*/
+        emit Released(
+            _tokenId,
+            _milestoneId,
+            msg.sender,
+            balancesOfBuyers[_tokenId],
+            price
+        );
+    }
 
-    /// @notice Function should allow buyer or admin to approve contract competition
-    function adminApproveInvoice() private {}
+    function reedemETHPerMilestone(uint256 _tokenId, uint256 _milestoneId) public isInitialized isSeller(msg.sender, _tokenId) {
+        (uint256 startDate, uint256 endDate) = invoice.getMilestoneDates(_tokenId, _milestoneId);
 
-    function adminSetDispute(bool state) private {}
+        require(endDate < block.timestamp, "Can't redeem ETH before the registered end date.");
+        require(balancesOfSellers[_tokenId] > 0, "Can't redeem ETH from an empty balance.");
 
-    function adminSetFees() private {}
+        uint256 price = invoice.getPricePerMilestone(_tokenId, _milestoneId);
 
-    function adminSetGracePeriod() private {}
+        balancesOfSellers[_tokenId] -= price; // deduct amount from balance
 
-    function adminGetAllInvoices() private {}
+        (bool success, ) = msg.sender.call{value: price}("");
 
-    function adminWithdraw() private {}
+        emit Redeemed(
+            _tokenId,
+            _milestoneId,
+            msg.sender,
+            balancesOfSellers[_tokenId],
+            price
+        );
+    }
 
-    /*============================================== Contract Methods ==============================================*/
+    function approveWithdrawl(uint256 _tokenId) public onlyOwner {
+        approvals[_tokenId] = true;
 
-    function createInvoiceNFT() internal {}
+        emit WithdrawlApproved(_tokenId);
+    }
+    
+    function withdrawETH(uint256 _tokenId) public isInitialized {
+        require(invoiceNFT.ownerOf(_tokenId) == msg.sender, "Must own token to withdraw the funds.");
+        require(approvals[_tokenId], "Must get admin approval to withdraw.");
+        require(balancesOfBuyers[_tokenId] > 0, "Can't withdraw ETH from an empty balance.");
 
-    function setInvoiceRewards() internal {}
+        // 1. retrieve current balance
+        uint256 amount = balancesOfBuyers[_tokenId];
 
-    function transferTRewards() internal {}
-}
+        // 2. clear the balance
+        balancesOfBuyers[_tokenId] = 0;
+
+        // 3. transfer the amount
+        (bool success, ) = msg.sender.call{value: amount}("");
+
+        emit WithdrewAllETH(
+            _tokenId,
+            msg.sender,
+            balancesOfBuyers[_tokenId],
+            success
+        );
+    }
+
+} 

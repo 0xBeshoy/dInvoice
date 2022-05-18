@@ -1,15 +1,4 @@
-# Basic Sample Hardhat Project
+# Chainlink Hackathon 2022
 
-This project demonstrates a basic Hardhat use case. It comes with a sample contract, a test for that contract, a sample script that deploys that contract, and an example of a task implementation, which simply lists the available accounts.
-
-Try running some of the following tasks:
-
-```shell
-npx hardhat accounts
-npx hardhat compile
-npx hardhat clean
-npx hardhat test
-npx hardhat node
-node scripts/sample-script.js
-npx hardhat help
-```
+- Sample data for testing `createInvoice()` in the `Invoice.sol` contract:
+    - Milestones: [[1, 1000000000000000, 1652623222, 1652709622], [2, 2000000000000000, 1652623222, 1652709622]]

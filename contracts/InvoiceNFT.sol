@@ -1,6 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0
 
-pragma solidity ^0.8.4;
+/*
+       /$$ /$$$$$$                               /$$                           /$$   /$$ /$$$$$$$$ /$$$$$$$$
+      | $$|_  $$_/                              |__/                          | $$$ | $$| $$_____/|__  $$__/
+  /$$$$$$$  | $$   /$$$$$$$  /$$    /$$ /$$$$$$  /$$  /$$$$$$$  /$$$$$$       | $$$$| $$| $$         | $$   
+ /$$__  $$  | $$  | $$__  $$|  $$  /$$//$$__  $$| $$ /$$_____/ /$$__  $$      | $$ $$ $$| $$$$$      | $$   
+| $$  | $$  | $$  | $$  \ $$ \  $$/$$/| $$  \ $$| $$| $$      | $$$$$$$$      | $$  $$$$| $$__/      | $$   
+| $$  | $$  | $$  | $$  | $$  \  $$$/ | $$  | $$| $$| $$      | $$_____/      | $$\  $$$| $$         | $$   
+|  $$$$$$$ /$$$$$$| $$  | $$   \  $/  |  $$$$$$/| $$|  $$$$$$$|  $$$$$$$      | $$ \  $$| $$         | $$   
+ \_______/|______/|__/  |__/    \_/    \______/ |__/ \_______/ \_______/      |__/  \__/|__/         |__/   
+                                                                                                            
+                                                                                                            
+                                                                                                            
+*/
+
+pragma solidity 0.8.13;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
@@ -9,13 +23,13 @@ import "@openzeppelin/contracts/utils/Counters.sol";
 contract InvoiceNFT is ERC721URIStorage {
     using Counters for Counters.Counter;
     Counters.Counter private _tokenIds;
-    address escrowContract;
 
-    constructor(address _escrowContractAddress) ERC721("dInvoice Tokens", "DIT") {
-        escrowContract = _escrowContractAddress;
-    }
+    constructor() ERC721("dInvoice Tokens", "DIT") {}
 
-    function createToken(address _client, string memory _tokenURI) public returns (uint256) {
+    function createToken(address _client, string memory _tokenURI)
+        public
+        returns (uint256)
+    {
         _tokenIds.increment();
         uint256 newItemId = _tokenIds.current();
 
@@ -24,5 +38,4 @@ contract InvoiceNFT is ERC721URIStorage {
 
         return newItemId;
     }
-
 }

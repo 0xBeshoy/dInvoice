@@ -4,7 +4,9 @@
 .artifacts
 cache
 artifacts
-
+bin
+.vscode
+*soljson*
 
 # Logs
 logs

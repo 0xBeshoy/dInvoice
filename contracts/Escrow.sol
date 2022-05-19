@@ -14,7 +14,7 @@
                                                                                                                                                                                                                                                                                             
 */
 
-pragma solidity ^0.8.4;
+pragma solidity 0.8.13;
 
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
@@ -35,12 +35,12 @@ contract Escrow is Ownable, ReentrancyGuard {
 
     mapping(uint256 => uint256) balancesOfBuyers; // token id => amount escrowed
     mapping(uint256 => uint256) balancesOfSellers; // token id => amount to be redeemed
-    mapping(uint256 => bool) approvals; // token id => withdrawl approval by admin
+    mapping(uint256 => bool) approvals; // token id => withdrawal approval by admin
 
     event Escrowed(
-        address _buyer, 
-        address _seller, 
-        uint256 _tokenId, 
+        address _buyer,
+        address _seller,
+        uint256 _tokenId,
         uint256 _amount
     );
 
@@ -60,7 +60,7 @@ contract Escrow is Ownable, ReentrancyGuard {
         uint256 _price
     );
 
-    event WithdrawlApproved(uint256 _tokenId);
+    event WithdrawalApproved(uint256 _tokenId);
 
     event WithdrewAllETH(
         uint256 _tokenId,
@@ -75,11 +75,17 @@ contract Escrow is Ownable, ReentrancyGuard {
     }
 
     modifier isSeller(address _seller, uint256 _id) {
-        require(_seller == invoice.getSeller(_id), "Must be the registered seller under the project." );
+        require(
+            _seller == invoice.getSeller(_id),
+            "Must be the registered seller under the project."
+        );
         _;
     }
 
-    function initialize(address _invoiceNFTContractAddress, address _invoiceContractAddress) external onlyOwner {
+    function initialize(
+        address _invoiceNFTContractAddress,
+        address _invoiceContractAddress
+    ) external onlyOwner {
         /** 
             instead of using a constructor, 
             the contract owner can invoke the initialize function
@@ -90,7 +96,11 @@ contract Escrow is Ownable, ReentrancyGuard {
         initialized = true;
     }
 
-    function escrowToken(address _seller, uint256 _invoiceId, uint256 _amount) external payable isInitialized nonReentrant {
+    function escrowToken(
+        address _seller,
+        uint256 _invoiceId,
+        uint256 _amount
+    ) external payable isInitialized nonReentrant {
         require(_seller != address(0), "Cannot escrow to zero address.");
         require(msg.value > 0, "Cannot escrow 0 ETH.");
         require(msg.value > _amount, "Please deposit a sufficient amount.");
@@ -101,21 +111,25 @@ contract Escrow is Ownable, ReentrancyGuard {
 
         balancesOfBuyers[tokenId] = msg.value;
 
-        emit Escrowed(
-            msg.sender,
-            _seller,
-            tokenId,
-            _amount
-        );
+        emit Escrowed(msg.sender, _seller, tokenId, _amount);
     }
 
     /// @dev releasing ETH also means the approval of the client
-    function releaseETH(uint256 _tokenId, uint256 _milestoneId) public isInitialized {
-        require(invoiceNFT.ownerOf(_tokenId) == msg.sender, "Must own token to release the funds.");
+    function releaseETH(uint256 _tokenId, uint256 _milestoneId)
+        public
+        isInitialized
+    {
+        require(
+            invoiceNFT.ownerOf(_tokenId) == msg.sender,
+            "Must own token to release the funds."
+        );
 
         uint256 price = invoice.getPricePerMilestone(_tokenId, _milestoneId);
 
-        require(balancesOfBuyers[_tokenId] >= price, "Must have a sufficient balance.");
+        require(
+            balancesOfBuyers[_tokenId] >= price,
+            "Must have a sufficient balance."
+        );
 
         balancesOfSellers[_tokenId] += price; // add to seller
         balancesOfBuyers[_tokenId] -= price; // deduct from buyer
@@ -129,11 +143,24 @@ contract Escrow is Ownable, ReentrancyGuard {
         );
     }
 
-    function reedemETHPerMilestone(uint256 _tokenId, uint256 _milestoneId) public isInitialized isSeller(msg.sender, _tokenId) {
-        (uint256 startDate, uint256 endDate) = invoice.getMilestoneDates(_tokenId, _milestoneId);
+    function reedemETHPerMilestone(uint256 _tokenId, uint256 _milestoneId)
+        public
+        isInitialized
+        isSeller(msg.sender, _tokenId)
+    {
+        (uint256 startDate, uint256 endDate) = invoice.getMilestoneDates(
+            _tokenId,
+            _milestoneId
+        );
 
-        require(endDate < block.timestamp, "Can't redeem ETH before the registered end date.");
-        require(balancesOfSellers[_tokenId] > 0, "Can't redeem ETH from an empty balance.");
+        require(
+            endDate < block.timestamp,
+            "Can't redeem ETH before the registered end date."
+        );
+        require(
+            balancesOfSellers[_tokenId] > 0,
+            "Can't redeem ETH from an empty balance."
+        );
 
         uint256 price = invoice.getPricePerMilestone(_tokenId, _milestoneId);
 
@@ -150,16 +177,22 @@ contract Escrow is Ownable, ReentrancyGuard {
         );
     }
 
-    function approveWithdrawl(uint256 _tokenId) public onlyOwner {
+    function approveWithdrawal(uint256 _tokenId) public onlyOwner {
         approvals[_tokenId] = true;
 
-        emit WithdrawlApproved(_tokenId);
+        emit WithdrawalApproved(_tokenId);
     }
-    
+
     function withdrawETH(uint256 _tokenId) public isInitialized {
-        require(invoiceNFT.ownerOf(_tokenId) == msg.sender, "Must own token to withdraw the funds.");
+        require(
+            invoiceNFT.ownerOf(_tokenId) == msg.sender,
+            "Must own token to withdraw the funds."
+        );
         require(approvals[_tokenId], "Must get admin approval to withdraw.");
-        require(balancesOfBuyers[_tokenId] > 0, "Can't withdraw ETH from an empty balance.");
+        require(
+            balancesOfBuyers[_tokenId] > 0,
+            "Can't withdraw ETH from an empty balance."
+        );
 
         // 1. retrieve current balance
         uint256 amount = balancesOfBuyers[_tokenId];
@@ -177,5 +210,4 @@ contract Escrow is Ownable, ReentrancyGuard {
             success
         );
     }
-
-} 
+}

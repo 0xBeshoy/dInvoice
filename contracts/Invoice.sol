@@ -31,9 +31,10 @@ contract Invoice is Ownable {
         address payable client;
         uint256 startDate;
         uint256 endDate;
+        Milestone[] invoiceMilestones;
     }
 
-    //TODO: Milestones should be inside of the InvoiceDetails struct so every invoice has it's own array of Milestones mapped to it only, will figure it out when I get back home
+    //TODO: Milestones inside of InvoiceDetailes created, needs to be tested
     struct Milestone {
         uint256 milestoneId;
         uint256 price;
@@ -41,11 +42,10 @@ contract Invoice is Ownable {
         uint256 endDate;
     }
 
-    mapping(uint256 => InvoiceDetails) internal idToInvoice; // invoice id => invoice details
+    mapping(uint256 => InvoiceDetails) internal invoiceDB; // invoice id => invoice details
     mapping(uint256 => address) internal idToClient; // invoice id => buyer address
     mapping(uint256 => address) internal idToSeller; // invoice id => seller address
     mapping(uint256 => mapping(uint256 => Milestone)) internal idToMilestone; // invoice id => (milestone id => milestone details)
-    mapping(uint256 => Milestone) internal milestonesPerInvoice;
 
     event InvoiceCreated(
         uint256 indexed _invoiceId,
@@ -53,7 +53,8 @@ contract Invoice is Ownable {
         address _seller,
         address _client,
         uint256 _startDate, // Epoch timestamp
-        uint256 _endDate
+        uint256 _endDate,
+        Milestone[] _milestones
     );
 
     event MilestoneAssigned(
@@ -66,7 +67,7 @@ contract Invoice is Ownable {
     function createInvoice(
         string memory _tokenURI,
         address _client,
-        Milestone[] calldata _milestones, // why is it of "calldata" type?
+        Milestone[] memory _milestones,
         uint256 _startDate,
         uint256 _endDate
     ) public {
@@ -74,25 +75,33 @@ contract Invoice is Ownable {
         _invoiceIds.increment();
         uint256 invoiceId = _invoiceIds.current();
 
-        // creates an invoice instance
-        idToInvoice[invoiceId] = InvoiceDetails(
-            invoiceId,
-            _tokenURI,
-            payable(msg.sender),
-            payable(_client),
-            _startDate,
-            _endDate
-        );
+        // Milestone[] memory crrntMilestones;
+
+        /*
+        struct Milestone {
+                uint256 milestoneId;
+                uint256 price;
+                uint256 startDate;
+                uint256 endDate;
+    }*/
 
         for (uint256 i = 0; i < _milestones.length; i++) {
-            assignMilestone(
-                invoiceId,
-                _milestones[i].milestoneId,
-                _milestones[i].price,
-                _milestones[i].startDate,
-                _milestones[i].endDate
+            invoiceDB[invoiceId].invoiceMilestones.push(
+                Milestone(
+                    _milestones[i].milestoneId,
+                    _milestones[i].price,
+                    _milestones[i].startDate,
+                    _milestones[i].endDate
+                )
             );
         }
+
+        invoiceDB[invoiceId].invoiceId = invoiceId;
+        invoiceDB[invoiceId].tokenURI = _tokenURI;
+        invoiceDB[invoiceId].seller = payable(msg.sender);
+        invoiceDB[invoiceId].client = payable(_client);
+        invoiceDB[invoiceId].startDate = _startDate;
+        invoiceDB[invoiceId].endDate = _endDate;
 
         // store the address of the client
         idToClient[invoiceId] = _client;
@@ -106,33 +115,34 @@ contract Invoice is Ownable {
             msg.sender,
             _client,
             _startDate,
-            _endDate
+            _endDate,
+            _milestones
         );
     }
 
-    function assignMilestone(
-        uint256 _invoiceId,
-        uint256 _milestoneId,
-        uint256 _price,
-        uint256 _startDate,
-        uint256 _endDate
-    ) internal {
-        idToMilestone[_invoiceId][_milestoneId] = Milestone(
-            _milestoneId,
-            _price,
-            _startDate,
-            _endDate
-        );
+    // function assignMilestone(
+    //     uint256 _invoiceId,
+    //     uint256 _milestoneId,
+    //     uint256 _price,
+    //     uint256 _startDate,
+    //     uint256 _endDate
+    // ) internal {
+    //     idToMilestone[_invoiceId][_milestoneId] = Milestone(
+    //         _milestoneId,
+    //         _price,
+    //         _startDate,
+    //         _endDate
+    //     );
 
-        emit MilestoneAssigned(_milestoneId, _price, _startDate, _endDate);
-    }
+    //     emit MilestoneAssigned(_milestoneId, _price, _startDate, _endDate);
+    // }
 
     function getTokenURI(uint256 _invoiceId)
         external
         view
         returns (string memory)
     {
-        return idToInvoice[_invoiceId].tokenURI;
+        return invoiceDB[_invoiceId].tokenURI;
     }
 
     function getPricePerMilestone(uint256 _invoiceId, uint256 _milestoneId)
